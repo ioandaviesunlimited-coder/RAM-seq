@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    #seq-wrap {
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+      cursor: ew-resize;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    #seq-canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    #scrub-line {
+      position: absolute;
+      top: 0;
+      left: -2px;
+      width: 1px;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.3);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="seq-wrap">
+    <canvas id="seq-canvas"></canvas>
+    <div id="scrub-line"></div>
+  </div>
+
+  <script>
+  (function () {
+
+    // ── Config ─────────────────────────────────────────────
+    const FRAME_COUNT  = 59;
+    const IMAGE_DIR    = 'images/';      // folder your PNGs live in
+    const IMAGE_PREFIX = 'Frame_';       // filename prefix
+    const IMAGE_EXT    = '.png';
+    const PAD_LENGTH   = 4;              // e.g. Frame_0000
+    // ───────────────────────────────────────────────────────
+
+    const wrap      = document.getElementById('seq-wrap');
+    const canvas    = document.getElementById('seq-canvas');
+    const scrubLine = document.getElementById('scrub-line');
+    const ctx       = canvas.getContext('2d');
+
+    let frames      = [];
+    let loadedCount = 0;
+    let ready       = false;
+    let currentFrame = 0;
+
+    function pad(n) {
+      return String(n).padStart(PAD_LENGTH, '0');
+    }
+
+    function imagePath(i) {
+      return `${IMAGE_DIR}${IMAGE_PREFIX}${pad(i)}${IMAGE_EXT}`;
+    }
+
+    // preload all frames
+    for (let i = 0; i < FRAME_COUNT; i++) {
+      const img = new Image();
+      img.src = imagePath(i);
+      img.onload = () => {
+        loadedCount++;
+        if (loadedCount === 1) {
+          canvas.width  = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          ctx.drawImage(img, 0, 0);
+        }
+        if (loadedCount === FRAME_COUNT) {
+          ready = true;
+        }
+      };
+      frames.push(img);
+    }
+
+    function drawFrame(idx) {
+      if (!frames[idx] || !frames[idx].complete) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(frames[idx], 0, 0);
+    }
+
+    function scrubToX(clientX) {
+      const rect  = wrap.getBoundingClientRect();
+      const pct   = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const frame = Math.round(pct * (FRAME_COUNT - 1));
+      scrubLine.style.left = (clientX - rect.left) + 'px';
+      if (frame !== currentFrame) {
+        currentFrame = frame;
+        drawFrame(frame);
+      }
+    }
+
+    function hideLine() {
+      scrubLine.style.left = '-2px';
+    }
+
+    // ── Desktop: mouse ──────────────────────────────────────
+    wrap.addEventListener('mousemove', (e) => {
+      if (!ready) return;
+      scrubToX(e.clientX);
+    });
+
+    wrap.addEventListener('mouseleave', hideLine);
+
+    // ── Mobile: touch drag ──────────────────────────────────
+    wrap.addEventListener('touchstart', (e) => {
+      if (!ready) return;
+      scrubToX(e.touches[0].clientX);
+    }, { passive: true });
+
+    wrap.addEventListener('touchmove', (e) => {
+      if (!ready) return;
+      e.preventDefault();
+      scrubToX(e.touches[0].clientX);
+    }, { passive: false });
+
+    wrap.addEventListener('touchend', hideLine);
+
+  })();
+  </script>
+
+</body>
+</html>
